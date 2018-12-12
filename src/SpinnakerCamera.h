@@ -16,13 +16,14 @@ public:
 
     void release();
     std::string info() const;
+    void shot() const;
 
 private:
     void initialize();
 
     Spinnaker::SystemPtr system = NULL;
     Spinnaker::CameraList camList;
-    Spinnaker::CameraPtr pCamp = NULL;
+    Spinnaker::CameraPtr pCam = NULL;
 };
 
 #endif  // SPINNAKER_CAMERA_H
