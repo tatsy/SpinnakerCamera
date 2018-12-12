@@ -188,6 +188,10 @@ void SpinnakerCamera::configure() {
         // Auto gain
         pCam->GainAuto = m_autoGain ? GainAuto_Continuous : GainAuto_Off;
         std::cout << "Auto gain control: " << (m_autoGain ? "On" : "Off") << std::endl;
+        if (!m_autoGain) {
+            pCam->Gain = pCam->Gain.GetMax();
+            std::cout << "Gain: " << pCam->Gain.GetValue() << " dB" << std::endl;
+        }
 
         // Auto white balancing
         pCam->BalanceWhiteAuto = m_autoWhiteBlance ? BalanceWhiteAuto_Continuous : BalanceWhiteAuto_Off;
