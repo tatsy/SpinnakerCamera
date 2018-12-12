@@ -189,7 +189,7 @@ void SpinnakerCamera::configure() {
         pCam->GainAuto = m_autoGain ? GainAuto_Continuous : GainAuto_Off;
         std::cout << "Auto gain control: " << (m_autoGain ? "On" : "Off") << std::endl;
         if (!m_autoGain) {
-            pCam->Gain = pCam->Gain.GetMax();
+            pCam->Gain = pCam->Gain.GetMax() * 0.5;
             std::cout << "Gain: " << pCam->Gain.GetValue() << " dB" << std::endl;
         }
 
@@ -234,8 +234,8 @@ void SpinnakerCamera::acquireImage() {
         pCam->BeginAcquisition();
 
         do {
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
             GrabNextImageByTrigger(pCam);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         } while (!handler.isFinish());
 
         pCam->EndAcquisition();
