@@ -8,7 +8,6 @@ int main(int argc, char **argv) {
         camera = new SpinnakerCamera();
         std::cout << camera->info() << std::endl;
 
-        camera->setPixelFormat(PixelFormat::RGB, 8);
         camera->setGamma(1.0);
 
         camera->setExposureTime(1.0);

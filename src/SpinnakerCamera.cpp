@@ -4,12 +4,11 @@
 #include <sstream>
 
 #include "SpinGenApi/SpinnakerGenApi.h"
+#include <thread>
 
 using namespace Spinnaker;
 using namespace Spinnaker::GenApi;
 using namespace Spinnaker::GenICam;
-
-std::unordered_map<PixelFormat, std::string> SpinnakerCamera::fmt2str;
 
 namespace {
 
@@ -24,6 +23,35 @@ void GrabNextImageByTrigger(CameraPtr pCam) {
 }
 
 }  // anonymous namespace
+
+class ImageEventHandler : public ImageEvent {
+public:
+    ImageEventHandler(CameraPtr pCam, const std::string &filename)
+        : m_filename{ filename } {
+    }
+
+    ~ImageEventHandler() {}
+
+    void OnImageEvent(ImagePtr image) override {
+        if (image->IsIncomplete()) {
+            std::cerr << "Image incomplete: "
+                      << Image::GetImageStatusDescription(image->GetImageStatus())
+                      << "..." << std::endl;
+        } else {
+            ImagePtr convertedImage = image->Convert(PixelFormat_RGB8, HQ_LINEAR);
+            convertedImage->Save(m_filename.c_str());
+            m_finish = true;
+
+            std::cout << "Saved to: " << m_filename << std::endl;
+        }
+    }
+
+    bool isFinish() const { return m_finish; }
+
+private:
+    std::string m_filename;
+    bool m_finish = false;
+};
 
 // -----------------------------------------------------------------------------
 // Public methods
@@ -85,15 +113,9 @@ std::string SpinnakerCamera::info() const {
 void SpinnakerCamera::trigger() {
     try {
         pCam->Init();
-
-        INodeMap &nodeMap = pCam->GetNodeMap();
-
         configure();
-
         acquireImage();
-
         reset();
-
         pCam->DeInit();
     } catch (Spinnaker::Exception &e) {
         throw std::runtime_error("Error: " + std::string(e.what()));
@@ -112,11 +134,6 @@ void SpinnakerCamera::setAutoWhiteBalance(bool enable) {
     m_autoWhiteBlance = enable;
 }
 
-void SpinnakerCamera::setPixelFormat(PixelFormat format, int bitDepth) {
-    m_pixelFormat = format;
-    m_bitDepth = bitDepth;
-}
-
 void SpinnakerCamera::setGamma(double gamma) {
     m_gamma = gamma;
 }
@@ -126,14 +143,6 @@ void SpinnakerCamera::setGamma(double gamma) {
 // -----------------------------------------------------------------------------
 
 void SpinnakerCamera::initialize() {
-    // Pixel format 
-    if (fmt2str.empty()) {
-        fmt2str[PixelFormat::Mono] = "Mono";
-        fmt2str[PixelFormat::RGB] = "RGB";
-        fmt2str[PixelFormat::BayerRG] = "BayerRG";
-        fmt2str[PixelFormat::BayerGB] = "BayerGB";
-    }
-
     // Retrieve singleton reference to system object
     system = System::GetInstance();
 
@@ -149,11 +158,9 @@ void SpinnakerCamera::initialize() {
 }
 
 void SpinnakerCamera::configure() {
-    INodeMap &nodeMap = pCam->GetNodeMap();
-
     try {
         // Trigger mode
-        //pCam->TriggerMode = TriggerMode_Off;
+        pCam->TriggerMode = TriggerMode_Off;
         pCam->TriggerMode = TriggerMode_On;
         pCam->TriggerSource = TriggerSource_Software;
 
@@ -215,35 +222,20 @@ void SpinnakerCamera::acquireImage() {
         pCam->AcquisitionMode = AcquisitionMode_Continuous;
         std::cout << "Acquisition mode: Continuous" << std::endl;
 
+        char filename[256];
+        sprintf(filename, "image-%.6f.jpg", m_exposureTime);
+        ImageEventHandler handler(pCam, filename);
+
+        pCam->RegisterEvent(handler);
         pCam->BeginAcquisition();
 
-        ImagePtr pResultImage = NULL;
-        while (true) {
-            try {
-                GrabNextImageByTrigger(pCam);
-                pResultImage = pCam->GetNextImage(1000);
-                break;
-            } catch (Spinnaker::Exception &e) {
-                std::cerr << e.what() << std::endl;
-            }
-        }
-
-        if (pResultImage->IsIncomplete()) {
-            std::cout << "Image incomplete: "
-                << Image::GetImageStatusDescription(pResultImage->GetImageStatus())
-                << "..." << std::endl;
-        } else {
-            ImagePtr convertedImage = pResultImage->Convert(PixelFormat_RGB8, HQ_LINEAR);
-
-            char filename[256];
-            sprintf(filename, "image-%.6f.jpg", m_exposureTime);
-            convertedImage->Save(filename);
-            std::cout << "Image saved at " << filename << std::endl;
-        }
-
-        pResultImage->Release();
+        do {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            GrabNextImageByTrigger(pCam);
+        } while (!handler.isFinish());
 
         pCam->EndAcquisition();
+        pCam->UnregisterEvent(handler);
 
     } catch (Spinnaker::Exception &e) {
         throw std::runtime_error("Error: " + std::string(e.what()));
