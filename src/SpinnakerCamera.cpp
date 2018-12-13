@@ -38,11 +38,10 @@ public:
                       << Image::GetImageStatusDescription(image->GetImageStatus())
                       << "..." << std::endl;
         } else {
-            ImagePtr convertedImage = image->Convert(PixelFormat_RGB8, HQ_LINEAR);
+            ImagePtr convertedImage = image->Convert(PixelFormat_RGB8, RIGOROUS);
             convertedImage->Save(m_filename.c_str());
-            m_finish = true;
-
             std::cout << "Saved to: " << m_filename << std::endl;
+            m_finish = true;
         }
     }
 
@@ -197,6 +196,10 @@ void SpinnakerCamera::configure() {
         pCam->BalanceWhiteAuto = m_autoWhiteBlance ? BalanceWhiteAuto_Continuous : BalanceWhiteAuto_Off;
         std::cout << "Auto white balance: " << (m_autoWhiteBlance ? "On" : "Off") << std::endl;
 
+        // Black level
+        //pCam->BlackLevelAuto = BlackLevelAuto_Off;
+        pCam->BlackLevel = 1.5;
+
         // Gamma correction
         pCam->Gamma = m_gamma;
         std::cout << "Gamma: " << m_gamma << std::endl;
@@ -235,7 +238,7 @@ void SpinnakerCamera::acquireImage() {
 
         do {
             GrabNextImageByTrigger(pCam);
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            std::this_thread::sleep_for(std::chrono::milliseconds((uint32_t)(500.0 * m_exposureTime)));
         } while (!handler.isFinish());
 
         pCam->EndAcquisition();
